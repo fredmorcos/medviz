@@ -1,0 +1,27 @@
+[package]
+name = "medviz"
+version = "0.1.0"
+description = "Extract slices from volumetric data"
+authors = ["Fred Morcos <fm@fredmorcos.com>"]
+edition = "2018"
+readme = "README.md"
+keywords = ["visualization", "volumetric"]
+categories = ["command-line-utilities", "graphics", "visualization"]
+# homepage =
+# repository =
+# license = MIT
+# documentation =
+
+[lib]
+name = "medviz"
+
+[[bin]]
+name = "medviz"
+
+[dependencies]
+derive_more = "0.99"
+derive-new = "0.5"
+atoi = "0.4"
+structopt = "0.3"
+env_logger = "0.8"
+log = "0.4"
