@@ -9,6 +9,7 @@
 //! slices.
 
 pub mod metadata;
+pub mod utils;
 
 pub use metadata::Err as VolumeMdErr;
 pub use metadata::VolumeMd;
