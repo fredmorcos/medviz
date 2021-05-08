@@ -1,12 +1,15 @@
 #![warn(clippy::all)]
 
+use bmp::{px, Image, Pixel};
 use derive_more::{Display, From};
 use derive_new::new;
 use log::{debug, info, trace};
-use medviz::{VolumeMd, VolumeMdErr};
+use medviz::{utils, Volume, VolumeErr, VolumeMd, VolumeMdErr};
 use memmap::MmapOptions;
+use std::convert::TryFrom;
 use std::fmt;
 use std::io;
+use std::num::TryFromIntError;
 use std::path::PathBuf;
 use std::{fs::File, io::Read};
 use structopt::StructOpt;
@@ -19,9 +22,17 @@ enum Err {
   #[display(fmt = "IO Error: {}", _0)]
   Io(io::Error),
 
+  /// Errors when converting dimensions to different types.
+  #[display(fmt = "Dimension Error: {}", _0)]
+  Dimension(TryFromIntError),
+
   /// Errors from metadata loading and handling.
   #[display(fmt = "Metadata Error: {}", _0)]
   VolumeMd(VolumeMdErr),
+
+  /// Errors from volume data handling.
+  #[display(fmt = "Volume Data Error: {}", _0)]
+  Volume(VolumeErr),
 }
 
 /// When returning an error from main(), this will print its Display
@@ -46,6 +57,10 @@ struct Opt {
   /// Input: Volumetric data file.
   #[structopt(short, long, name = "data-file", parse(from_os_str))]
   data: PathBuf,
+
+  /// Output: Z frame file (bmp).
+  #[structopt(short, long, name = "z-frame-file", parse(from_os_str))]
+  zfile: PathBuf,
 }
 
 fn main() -> Result<(), Err> {
@@ -79,6 +94,24 @@ fn main() -> Result<(), Err> {
   let map = unsafe { MmapOptions::new().map(&file)? };
 
   info!("Mapped {} bytes of data from {}", map.len(), opt.data.display());
+
+  let volume = Volume::<u16>::from_slice(metadata, &map)?;
+
+  let xdim = u32::try_from(metadata.xdim())?;
+  let ydim = u32::try_from(metadata.ydim())?;
+  let mut zimage = Image::new(xdim, ydim);
+
+  let zframe_index = metadata.zdim() / 2;
+  for (voxel, x, y) in volume.zframe(zframe_index) {
+    let x = u32::try_from(x)?;
+    let y = u32::try_from(y)?;
+
+    let normalized = utils::normalize(voxel);
+    zimage.set_pixel(x, y, px!(normalized, normalized, normalized));
+  }
+
+  info!("Saving Z frame to {}", opt.zfile.display());
+  zimage.save(&opt.zfile)?;
 
   Ok(())
 }
