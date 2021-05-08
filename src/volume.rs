@@ -1,7 +1,7 @@
 //! Handles data related to 3D volumetric data. The primary structure
 //! is the [volume struct](Volume).
 
-use crate::VolumeMd;
+use crate::{utils, VolumeMd};
 use derive_more::Display;
 use derive_new::new;
 use std::{marker::PhantomData, mem};
@@ -91,6 +91,67 @@ impl<'d, T> Volume<'d, T> {
     &self.data[start_voxel_byte_index..start_voxel_byte_index + zframe_bytes]
   }
 
+  /// Return the slice of bytes that represents a row on a frame on
+  /// the Z-axis.
+  fn zframe_row_bytes(&'d self, frame_index: usize, row_index: usize) -> &'d [u8] {
+    let row_bytes = self.metadata.xdim() * Voxel::<T>::size();
+    let start_byte_index = row_bytes * row_index;
+    let data = self.zframe_bytes(frame_index);
+    &data[start_byte_index..start_byte_index + row_bytes]
+  }
+
+  /// Create an iterator over the voxels in a frame on the Y-axis.
+  ///
+  /// The returned iterator also produces the coordinates for each
+  /// voxel value returned.
+  ///
+  /// # Notes
+  ///
+  /// Panics if `yframe_index` is outside the range of frames.
+  ///
+  /// # Arguments
+  ///
+  /// * `yframe_index` - The index of the frame on the Y-axis.
+  ///
+  /// # Returns
+  ///
+  /// An iterator over the voxels in the frame and their corresponding
+  /// coordinates.
+  pub fn yframe(&'d self, yframe_index: usize) -> impl Iterator<Item = (u16, usize, usize)> + 'd {
+    // This works by going over every frame on the Z-axis. At each of
+    // those frames, creates a slice out of the relevant row. The
+    // chunking is there to later collect the pairs of u8 values into
+    // u16 voxel values.
+    //
+    // The .rev() call is used to start going over the frames on the
+    // Z-axis in reverse, since that seems to produce the better
+    // (expected) result.
+    //
+    // This causes the creation of multiple iterators, one per
+    // row. These iterators then need to be chained together, this is
+    // done by flattening.
+    //
+    // The enumeration is useful to produce indexes from which the
+    // coordinates will be calculated.
+    //
+    // The remaining step is to create the u16 voxel value and create
+    // the coordinates out of the index. Both of these are done in the
+    // final mapping.
+    (0..self.metadata.zdim())
+      .rev()
+      .map(move |zframe_index| self.zframe_row_bytes(zframe_index, yframe_index).chunks(2))
+      .flatten()
+      .enumerate()
+      .map(move |(index, bytes)| {
+        // `index` was produced by the call to .enumerate(), and
+        // `bytes` (a slice of 2 u8 elements) was produced by the call
+        // to .chunks(2).
+        let voxel = utils::voxel_from_bytes(bytes[0], bytes[1]);
+        let xdim = self.metadata.xdim();
+        (voxel, index % xdim, index / xdim)
+      })
+  }
+
   /// Create an iterator over the voxels in a frame on the Z-axis.
   ///
   /// The returned iterator also produces the coordinates for each
@@ -98,23 +159,22 @@ impl<'d, T> Volume<'d, T> {
   ///
   /// # Notes
   ///
-  /// Panics if `frame_index` is outside the range of frames.
+  /// Panics if `zframe_index` is outside the range of frames.
   ///
   /// # Arguments
   ///
-  /// * `frame_index` - The index of the frame on the Z-axis.
+  /// * `zframe_index` - The index of the frame on the Z-axis.
   ///
   /// # Returns
   ///
   /// An iterator over the voxels in the frame and their corresponding
   /// coordinates.
-  pub fn zframe(&'d self, frame_index: usize) -> impl Iterator<Item = (u16, usize, usize)> + 'd {
-    let xdim = self.metadata.xdim();
-
-    self.zframe_bytes(frame_index).chunks(2).enumerate().map(move |(index, bytes)| {
+  pub fn zframe(&'d self, zframe_index: usize) -> impl Iterator<Item = (u16, usize, usize)> + 'd {
+    self.zframe_bytes(zframe_index).chunks(2).enumerate().map(move |(index, bytes)| {
       // Voxels are stored in little-endian. This should compile down
       // to a no-op on LE machines.
-      let voxel = u16::from_le_bytes([bytes[0], bytes[1]]);
+      let voxel = utils::voxel_from_bytes(bytes[0], bytes[1]);
+      let xdim = self.metadata.xdim();
       (voxel, index % xdim, index / xdim)
     })
   }
