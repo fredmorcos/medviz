@@ -10,6 +10,9 @@
 
 pub mod metadata;
 pub mod utils;
+pub mod volume;
 
 pub use metadata::Err as VolumeMdErr;
 pub use metadata::VolumeMd;
+pub use volume::Err as VolumeErr;
+pub use volume::Volume;
