@@ -4,6 +4,7 @@ use derive_more::{Display, From};
 use derive_new::new;
 use log::{debug, info, trace};
 use medviz::{VolumeMd, VolumeMdErr};
+use memmap::MmapOptions;
 use std::fmt;
 use std::io;
 use std::path::PathBuf;
@@ -41,6 +42,10 @@ struct Opt {
   /// Input: Metadata file.
   #[structopt(short, long, name = "metadata-file", parse(from_os_str))]
   metadata: PathBuf,
+
+  /// Input: Volumetric data file.
+  #[structopt(short, long, name = "data-file", parse(from_os_str))]
+  data: PathBuf,
 }
 
 fn main() -> Result<(), Err> {
@@ -69,6 +74,11 @@ fn main() -> Result<(), Err> {
   info!("  X-dim = {}", metadata.xdim());
   info!("  Y-dim = {}", metadata.ydim());
   info!("  Z-dim = {}", metadata.zdim());
+
+  let file = File::open(&opt.data)?;
+  let map = unsafe { MmapOptions::new().map(&file)? };
+
+  info!("Mapped {} bytes of data from {}", map.len(), opt.data.display());
 
   Ok(())
 }
