@@ -22,6 +22,25 @@ mod reference {
   }
 
   #[test]
+  fn raw_x() {
+    let (metadata, map) = md_and_map();
+    let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
+
+    let expected = read_file("tests/data/x.raw");
+    assert_eq!(expected.len(), metadata.ydim() * metadata.zdim() * mem::size_of::<u16>());
+
+    let mut actual = Vec::new();
+    {
+      let mut writer = BufWriter::new(&mut actual);
+      for (voxel, _, _) in volume.xframe(metadata.xdim() / 2) {
+        writer.write_all(&voxel.to_le_bytes()).unwrap();
+      }
+    }
+
+    assert_eq!(actual, expected);
+  }
+
+  #[test]
   fn raw_y() {
     let (metadata, map) = md_and_map();
     let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
@@ -54,6 +73,25 @@ mod reference {
       for (voxel, _, _) in volume.zframe(metadata.zdim() / 2) {
         writer.write_all(&voxel.to_le_bytes()).unwrap();
       }
+    }
+
+    assert_eq!(actual, expected);
+  }
+
+  #[test]
+  fn bmp_x() {
+    let (metadata, map) = md_and_map();
+    let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
+
+    let expected = read_file("tests/data/x.bmp");
+
+    let mut actual = Vec::new();
+    {
+      let mut writer = BufWriter::new(&mut actual);
+      utils::frame_bmp(metadata.ydim(), metadata.zdim(), volume.xframe(metadata.xdim() / 2))
+        .unwrap()
+        .to_writer(&mut writer)
+        .unwrap();
     }
 
     assert_eq!(actual, expected);

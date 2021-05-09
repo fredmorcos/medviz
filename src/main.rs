@@ -60,6 +60,10 @@ struct Opt {
   #[structopt(short, long, name = "data-file", parse(from_os_str))]
   data: PathBuf,
 
+  /// Output: X frame file (bmp).
+  #[structopt(short, long, name = "x-frame-file", parse(from_os_str))]
+  xfile: PathBuf,
+
   /// Output: Y frame file (bmp).
   #[structopt(short, long, name = "y-frame-file", parse(from_os_str))]
   yfile: PathBuf,
@@ -104,12 +108,24 @@ fn main() -> Result<(), Err> {
   let volume = Volume::<u16>::from_slice(metadata, &map)?;
 
   if opt.raw {
+    // Produce the X-frame, made up of voxels on the Y- and Z-axis.
+    create_frame_raw("X-frame", &opt.xfile, volume.xframe(metadata.xdim() / 2))?;
+
     // Produce the Y-frame, made up of voxels on the X- and Z-axis.
     create_frame_raw("Y-frame", &opt.yfile, volume.yframe(metadata.ydim() / 2))?;
 
     // Produce the Z-frame, made up of voxels on the X- and Y-axis.
     create_frame_raw("Z-frame", &opt.zfile, volume.zframe(metadata.zdim() / 2))?;
   } else {
+    // Produce the X-frame, made up of voxels on the Y- and Z-axis.
+    create_frame_image(
+      "X-frame",
+      &opt.xfile,
+      metadata.ydim(),
+      metadata.zdim(),
+      volume.xframe(metadata.xdim() / 2),
+    )?;
+
     // Produce the Y-frame, made up of voxels on the X- and Z-axis.
     create_frame_image(
       "Y-frame",

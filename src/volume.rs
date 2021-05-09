@@ -102,6 +102,60 @@ impl<'d, T> Volume<'d, T> {
     &zframe[row_byte_index..row_byte_index + row_size]
   }
 
+  /// Return an array of bytes that represents a voxel on a frame on
+  /// the Z-axis.
+  fn zframe_voxel_bytes(&'d self, zframe_index: usize, x: usize, y: usize) -> &'d [u8] {
+    let row = self.zframe_row_bytes(zframe_index, y);
+    let voxel_byte_index = x * Voxel::<T>::size();
+    &row[voxel_byte_index..voxel_byte_index + Voxel::<T>::size()]
+  }
+
+  /// Return an iterator over voxels of a column on a frame on the
+  /// Z-axis.
+  ///
+  /// Note that columns are not contiguous in memory, which means they
+  /// cannot be returned as a slice, making this the only function
+  /// available to get the voxels on a column.
+  fn zframe_col_iter(
+    &'d self,
+    frame_index: usize,
+    col_index: usize,
+  ) -> impl Iterator<Item = u16> + 'd {
+    (0..self.metadata.ydim()).map(move |row_index| {
+      let bytes = self.zframe_voxel_bytes(frame_index, col_index, row_index);
+      utils::voxel_from_bytes(bytes[0], bytes[1])
+    })
+  }
+
+  /// Create an iterator over the voxels in a frame on the X-axis.
+  ///
+  /// The returned iterator also produces the coordinates for each
+  /// voxel value returned.
+  ///
+  /// # Notes
+  ///
+  /// Panics if `xframe_index` is outside the range of frames.
+  ///
+  /// # Arguments
+  ///
+  /// * `xframe_index` - The index of the frame on the X-axis.
+  ///
+  /// # Returns
+  ///
+  /// An iterator over the voxels in the frame and their corresponding
+  /// coordinates.
+  pub fn xframe(&'d self, xframe_index: usize) -> impl Iterator<Item = (u16, usize, usize)> + 'd {
+    (0..self.metadata.zdim())
+      .rev()
+      .map(move |zframe_index| self.zframe_col_iter(zframe_index, xframe_index))
+      .flatten()
+      .enumerate()
+      .map(move |(index, voxel)| {
+        let ydim = self.metadata.ydim();
+        (voxel, index % ydim, index / ydim)
+      })
+  }
+
   /// Create an iterator over the voxels in a frame on the Y-axis.
   ///
   /// The returned iterator also produces the coordinates for each
