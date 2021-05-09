@@ -44,7 +44,7 @@ impl<'d> Volume<'d> {
     Ok(Self { metadata, data })
   }
 
-  /// Return the slice of bytes that represents a frame on the Z-axis.
+  /// Return a slice of bytes of a frame on the Z-axis.
   fn zframe_bytes(&'d self, zframe_index: usize) -> &'d [u8] {
     // Size in bytes of a frame on the Z-axis.
     let zframe_size = self.metadata.zframe_len() * Voxel::size();
@@ -52,8 +52,15 @@ impl<'d> Volume<'d> {
     &self.data[zframe_byte_index..zframe_byte_index + zframe_size]
   }
 
-  /// Return the slice of bytes that represents a row on a frame on
-  /// the Z-axis.
+  /// Return an iterator of voxels of a frame on the Z-axis.
+  fn zframe_iter(
+    &'d self,
+    zframe_index: usize,
+  ) -> impl Iterator<Item = Result<Voxel, MedvizErr>> + 'd {
+    self.zframe_bytes(zframe_index).chunks(Voxel::size()).map(|bytes| Voxel::from_slice(bytes))
+  }
+
+  /// Return a slice of bytes of a row on a frame on the Z-axis.
   fn zframe_row_bytes(&'d self, zframe_index: usize, row_index: usize) -> &'d [u8] {
     // Size in bytes of a row on a frame on the Z-axis.
     let row_size = self.metadata.xdim() * Voxel::size();
@@ -62,20 +69,31 @@ impl<'d> Volume<'d> {
     &zframe[row_byte_index..row_byte_index + row_size]
   }
 
-  /// Return an array of bytes that represents a voxel on a frame on
-  /// the Z-axis.
+  /// Return an iterator of voxels of a row on a frame on the Z-axis.
+  fn zframe_row_iter(
+    &'d self,
+    zframe_index: usize,
+    row_index: usize,
+  ) -> impl Iterator<Item = Result<Voxel, MedvizErr>> + 'd {
+    self
+      .zframe_row_bytes(zframe_index, row_index)
+      .chunks(Voxel::size())
+      .map(|bytes| Voxel::from_slice(bytes))
+  }
+
+  /// Return a slice of bytes of a voxel on a frame on the Z-axis.
   fn zframe_voxel_bytes(&'d self, zframe_index: usize, x: usize, y: usize) -> &'d [u8] {
     let row = self.zframe_row_bytes(zframe_index, y);
     let voxel_byte_index = x * Voxel::size();
     &row[voxel_byte_index..voxel_byte_index + Voxel::size()]
   }
 
-  /// Return an iterator over voxels of a column on a frame on the
+  /// Return an iterator of voxels of a column on a frame on the
   /// Z-axis.
   ///
   /// Note that columns are not contiguous in memory, which means they
   /// cannot be returned as a slice, making this the only function
-  /// available to get the voxels on a column.
+  /// available to get the voxels of a column.
   fn zframe_col_iter(
     &'d self,
     frame_index: usize,
@@ -108,12 +126,31 @@ impl<'d> Volume<'d> {
     &'d self,
     xframe_index: usize,
   ) -> impl Iterator<Item = (Result<Voxel, MedvizErr>, usize, usize)> + 'd {
+    // This works by going over every frame on the Z-axis. At each of
+    // those frames, creates a "line" (iterator) out of the relevant
+    // column.
+    //
+    // The .rev() call is used to start going over the frames on the
+    // Z-axis in reverse, since that seems to produce the expected
+    // result.
+    //
+    // This causes the creation of multiple iterators, one per
+    // column. These iterators then need to be chained together by
+    // flattening.
+    //
+    // The enumerate() iterator is useful to produce indexes from
+    // which the coordinates will be calculated.
+    //
+    // The remaining step is to create the coordinates out of the
+    // index and pack up each voxel and its coordinates in a
+    // triple. Both of these are done in the final mapping.
     (0..self.metadata.zdim())
       .rev()
       .map(move |zframe_index| self.zframe_col_iter(zframe_index, xframe_index))
       .flatten()
       .enumerate()
       .map(move |(index, voxel)| {
+        // `index` was produced by the call to .enumerate().
         let ydim = self.metadata.ydim();
         (voxel, index % ydim, index / ydim)
       })
@@ -141,36 +178,30 @@ impl<'d> Volume<'d> {
     yframe_index: usize,
   ) -> impl Iterator<Item = (Result<Voxel, MedvizErr>, usize, usize)> + 'd {
     // This works by going over every frame on the Z-axis. At each of
-    // those frames, creates a slice out of the relevant row. The
-    // chunking is there to later collect the pairs of u8 values into
-    // voxel values.
+    // those frames, creates a "line" (iterator) out of the relevant
+    // row.
     //
     // The .rev() call is used to start going over the frames on the
-    // Z-axis in reverse, since that seems to produce the better
-    // (expected) result.
+    // Z-axis in reverse, since that seems to produce the expected
+    // result.
     //
     // This causes the creation of multiple iterators, one per
-    // row. These iterators then need to be chained together, this is
-    // done by flattening.
+    // row. These iterators then need to be chained together by
+    // flattening.
     //
-    // The enumeration is useful to produce indexes from which the
-    // coordinates will be calculated.
+    // The enumerate() iterator is useful to produce indexes from
+    // which the coordinates will be calculated.
     //
-    // The remaining step is to create the voxel value and create the
-    // coordinates out of the index. Both of these are done in the
-    // final mapping.
+    // The remaining step is to create the coordinates out of the
+    // index and pack up each voxel and its coordinates in a
+    // triple. Both of these are done in the final mapping.
     (0..self.metadata.zdim())
       .rev()
-      .map(move |zframe_index| {
-        self.zframe_row_bytes(zframe_index, yframe_index).chunks(Voxel::size())
-      })
+      .map(move |zframe_index| self.zframe_row_iter(zframe_index, yframe_index))
       .flatten()
       .enumerate()
-      .map(move |(index, bytes)| {
-        // `index` was produced by the call to .enumerate(), and
-        // `bytes` (a slice of 2 u8 elements) was produced by the call
-        // to .chunks().
-        let voxel = Voxel::from_slice(bytes);
+      .map(move |(index, voxel)| {
+        // `index` was produced by the call to .enumerate().
         let xdim = self.metadata.xdim();
         (voxel, index % xdim, index / xdim)
       })
@@ -197,10 +228,8 @@ impl<'d> Volume<'d> {
     &'d self,
     zframe_index: usize,
   ) -> impl Iterator<Item = (Result<Voxel, MedvizErr>, usize, usize)> + 'd {
-    self.zframe_bytes(zframe_index).chunks(Voxel::size()).enumerate().map(move |(index, bytes)| {
-      // Voxels are stored in little-endian. This should compile down
-      // to a no-op on LE machines.
-      let voxel = Voxel::from_slice(bytes);
+    self.zframe_iter(zframe_index).enumerate().map(move |(index, voxel)| {
+      // `index` was produced by the call to .enumerate().
       let xdim = self.metadata.xdim();
       (voxel, index % xdim, index / xdim)
     })
