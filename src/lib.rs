@@ -8,11 +8,13 @@
 //! instead of "slices" to avoid confusion when also discussing Rust's
 //! slices.
 
+pub mod error;
 pub mod metadata;
 pub mod utils;
 pub mod volume;
+pub mod voxel;
 
-pub use metadata::Err as VolumeMdErr;
+pub use error::Err as MedvizErr;
 pub use metadata::VolumeMd;
-pub use volume::Err as VolumeErr;
 pub use volume::Volume;
+pub use voxel::Voxel;

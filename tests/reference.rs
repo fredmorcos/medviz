@@ -24,7 +24,7 @@ mod reference {
   #[test]
   fn raw_x() {
     let (metadata, map) = md_and_map();
-    let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
+    let volume = Volume::from_slice(metadata, &map).unwrap();
 
     let expected = read_file("tests/data/x.raw");
     assert_eq!(expected.len(), metadata.ydim() * metadata.zdim() * mem::size_of::<u16>());
@@ -33,7 +33,8 @@ mod reference {
     {
       let mut writer = BufWriter::new(&mut actual);
       for (voxel, _, _) in volume.xframe(metadata.xdim() / 2) {
-        writer.write_all(&voxel.to_le_bytes()).unwrap();
+        let voxel = voxel.unwrap();
+        writer.write_all(&voxel.value().to_le_bytes()).unwrap();
       }
     }
 
@@ -43,7 +44,7 @@ mod reference {
   #[test]
   fn raw_y() {
     let (metadata, map) = md_and_map();
-    let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
+    let volume = Volume::from_slice(metadata, &map).unwrap();
 
     let expected = read_file("tests/data/y.raw");
     assert_eq!(expected.len(), metadata.xdim() * metadata.zdim() * mem::size_of::<u16>());
@@ -52,7 +53,8 @@ mod reference {
     {
       let mut writer = BufWriter::new(&mut actual);
       for (voxel, _, _) in volume.yframe(metadata.ydim() / 2) {
-        writer.write_all(&voxel.to_le_bytes()).unwrap();
+        let voxel = voxel.unwrap();
+        writer.write_all(&voxel.value().to_le_bytes()).unwrap();
       }
     }
 
@@ -62,7 +64,7 @@ mod reference {
   #[test]
   fn raw_z() {
     let (metadata, map) = md_and_map();
-    let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
+    let volume = Volume::from_slice(metadata, &map).unwrap();
 
     let expected = read_file("tests/data/z.raw");
     assert_eq!(expected.len(), metadata.xdim() * metadata.ydim() * mem::size_of::<u16>());
@@ -71,7 +73,8 @@ mod reference {
     {
       let mut writer = BufWriter::new(&mut actual);
       for (voxel, _, _) in volume.zframe(metadata.zdim() / 2) {
-        writer.write_all(&voxel.to_le_bytes()).unwrap();
+        let voxel = voxel.unwrap();
+        writer.write_all(&voxel.value().to_le_bytes()).unwrap();
       }
     }
 
@@ -81,7 +84,7 @@ mod reference {
   #[test]
   fn bmp_x() {
     let (metadata, map) = md_and_map();
-    let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
+    let volume = Volume::from_slice(metadata, &map).unwrap();
 
     let expected = read_file("tests/data/x.bmp");
 
@@ -100,7 +103,7 @@ mod reference {
   #[test]
   fn bmp_y() {
     let (metadata, map) = md_and_map();
-    let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
+    let volume = Volume::from_slice(metadata, &map).unwrap();
 
     let expected = read_file("tests/data/y.bmp");
 
@@ -119,7 +122,7 @@ mod reference {
   #[test]
   fn bmp_z() {
     let (metadata, map) = md_and_map();
-    let volume = Volume::<u16>::from_slice(metadata, &map).unwrap();
+    let volume = Volume::from_slice(metadata, &map).unwrap();
 
     let expected = read_file("tests/data/z.bmp");
 

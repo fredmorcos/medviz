@@ -1,50 +1,10 @@
 //! Handles metadata related to 3D volumetric data. The primary
 //! structure is the [volume metadata struct](VolumeMd).
 
+use crate::MedvizErr;
 use atoi::FromRadix10Checked;
-use derive_more::Display;
 use derive_new::new;
 use log::{debug, warn};
-
-/// Metadata-related error type.
-#[derive(new, Display, Debug, PartialEq, Eq)]
-#[display(fmt = "{}")]
-pub enum Err {
-  /// Found a DimSize key without any values.
-  #[display(fmt = "Line {}: Expecting values for `DimSize` key", line_number)]
-  InvalidMd {
-    /// The line number at which the error was found.
-    line_number: usize,
-  },
-
-  /// One of the `DimSize` values is invalid.
-  #[display(fmt = "Line {}: Invalid value {} for dimension size", line_number, value)]
-  InvalidValue {
-    /// The line number at which the error was found.
-    line_number: usize,
-
-    /// The invalid value.
-    value: String,
-  },
-
-  /// A duplicate `DimSize` key was found.
-  #[display(fmt = "Line {}: Duplicated `DimSize` key", line_number)]
-  DuplicateKey {
-    /// The line number at which the error was found.
-    line_number: usize,
-  },
-
-  /// Could not find a `DimSize` key.
-  #[display(fmt = "Invalid metadata, `DimSize` key not found")]
-  KeyNotFound,
-
-  /// Found too many values for `DimSize`.
-  #[display(fmt = "Line {}: Too many values for `DimSize` key", line_number)]
-  TooManyValues {
-    /// The line number at which the error was found.
-    line_number: usize,
-  },
-}
 
 /// Volume metadata.
 #[derive(new, Debug, PartialEq, Eq, Clone, Copy)]
@@ -78,7 +38,7 @@ impl VolumeMd {
   ///
   /// A populated [volume metadata structure](VolumeMd) or [an
   /// error](Err).
-  pub fn from_buffer(buffer: &str) -> Result<Self, Err> {
+  pub fn from_buffer(buffer: &str) -> Result<Self, MedvizErr> {
     // The resulting VolumeMd. None if we haven't found a valid
     // `DimSize` entry and Some(...) if we have.
     let mut res = None;
@@ -108,12 +68,12 @@ impl VolumeMd {
 
       if res.is_some() {
         // We've already found a valid `DimSize` entry.
-        return Err(Err::new_duplicate_key(line_number));
+        return Err(MedvizErr::new_md_duplicate_key(line_number));
       }
 
       let value = match entry.next() {
         Some(value) => value.trim(),
-        None => return Err(Err::new_invalid_md(line_number)),
+        None => return Err(MedvizErr::new_md_missing_dim_size_values(line_number)),
       };
 
       let mut dims = value.split_whitespace();
@@ -134,7 +94,7 @@ impl VolumeMd {
         () => {
           match dims.next() {
             Some(dim) => dim,
-            None => return Err(Err::new_invalid_md(line_number)),
+            None => return Err(MedvizErr::new_md_missing_dim_size_values(line_number)),
           }
         };
       }
@@ -145,7 +105,7 @@ impl VolumeMd {
 
       if dims.next().is_some() {
         // There were more than 3 values provided.
-        return Err(Err::new_too_many_values(line_number));
+        return Err(MedvizErr::new_md_too_many_dim_size_values(line_number));
       }
 
       /// Parse a dimension value from a string.
@@ -169,14 +129,14 @@ impl VolumeMd {
 
           if rem == 0 {
             // The input was not a valid number.
-            return Err(Err::new_invalid_value(line_number, text.into()));
+            return Err(MedvizErr::new_md_invalid_dim_size_value(line_number, text.into()));
           }
 
           match dim {
             Some(dim) => dim,
             None => {
               // The input value would overflow usize.
-              return Err(Err::new_invalid_value(line_number, text.into()));
+              return Err(MedvizErr::new_md_invalid_dim_size_value(line_number, text.into()));
             }
           }
         }};
@@ -191,7 +151,7 @@ impl VolumeMd {
 
     match res {
       Some(res) => Ok(res),
-      None => Err(Err::new_key_not_found()),
+      None => Err(MedvizErr::new_md_dim_size_not_found()),
     }
   }
 
@@ -228,7 +188,8 @@ impl VolumeMd {
 
 #[cfg(test)]
 mod volume_metadata_tests {
-  use super::{Err, VolumeMd};
+  use super::VolumeMd;
+  use crate::MedvizErr;
 
   #[test]
   fn from_reader_success() {
@@ -258,7 +219,7 @@ mod volume_metadata_tests {
                   DimSize = \n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
     let err = VolumeMd::from_buffer(&input);
-    assert_eq!(err, Err(Err::InvalidMd { line_number: 3 }));
+    assert_eq!(err, Err(MedvizErr::MdMissingDimSizeValues { line_number: 3 }));
   }
 
   #[test]
@@ -268,7 +229,10 @@ mod volume_metadata_tests {
                   DimSize = 512 512 abc\n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
     let err = VolumeMd::from_buffer(&input);
-    assert_eq!(err, Err(Err::InvalidValue { line_number: 3, value: String::from("abc") }));
+    assert_eq!(
+      err,
+      Err(MedvizErr::MdInvalidDimSizeValue { line_number: 3, value: String::from("abc") })
+    );
   }
 
   #[test]
@@ -279,7 +243,7 @@ mod volume_metadata_tests {
                   ElementSpacing = 0.402344 0.402344 0.899994\n\
                   DimSize = 512 512 333\n";
     let err = VolumeMd::from_buffer(&input);
-    assert_eq!(err, Err(Err::DuplicateKey { line_number: 5 }));
+    assert_eq!(err, Err(MedvizErr::MdDuplicateKey { line_number: 5 }));
   }
 
   #[test]
@@ -288,7 +252,7 @@ mod volume_metadata_tests {
                   NDims = 3\n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
     let err = VolumeMd::from_buffer(&input);
-    assert_eq!(err, Err(Err::KeyNotFound));
+    assert_eq!(err, Err(MedvizErr::MdDimSizeNotFound));
   }
 
   #[test]
@@ -298,14 +262,14 @@ mod volume_metadata_tests {
                   DimSize = 512 512 333 333\n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
     let err = VolumeMd::from_buffer(&input);
-    assert_eq!(err, Err(Err::TooManyValues { line_number: 3 }));
+    assert_eq!(err, Err(MedvizErr::MdTooManyDimSizeValues { line_number: 3 }));
   }
 
   #[test]
   fn from_reader_fail_empty() {
     let input = "";
     let err = VolumeMd::from_buffer(&input);
-    assert_eq!(err, Err(Err::KeyNotFound));
+    assert_eq!(err, Err(MedvizErr::MdDimSizeNotFound));
   }
 
   #[test]
@@ -314,6 +278,6 @@ mod volume_metadata_tests {
                   \n\
                   \n";
     let err = VolumeMd::from_buffer(&input);
-    assert_eq!(err, Err(Err::KeyNotFound));
+    assert_eq!(err, Err(MedvizErr::MdDimSizeNotFound));
   }
 }

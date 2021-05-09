@@ -1,61 +1,21 @@
 //! Handles data related to 3D volumetric data. The primary structure
 //! is the [volume struct](Volume).
 
-use crate::{utils, VolumeMd};
-use derive_more::Display;
-use derive_new::new;
-use std::{marker::PhantomData, mem};
-
-/// A voxel.
-struct Voxel<T>(T);
-
-impl<T> Voxel<T> {
-  /// The size of a voxel.
-  fn size() -> usize {
-    mem::size_of::<T>()
-  }
-}
-
-/// Volume-related error type.
-#[derive(new, Display, Debug, PartialEq, Eq)]
-#[display(fmt = "{}")]
-pub enum Err {
-  /// Data size does not match metadata information.
-  #[display(
-    fmt = "Data size of {} bytes does not match metadata: expecting {} bytes",
-    actual,
-    expected
-  )]
-  DataSizeMismatch {
-    /// The size of data in bytes.
-    actual: usize,
-
-    /// The expected size in bytes based on metadata.
-    expected: usize,
-  },
-
-  /// Data size is uneven.
-  #[display(fmt = "Data size of {} bytes is uneven", size)]
-  DataSizeUneven {
-    /// The size of data in bytes.
-    size: usize,
-  },
-}
+use crate::MedvizErr;
+use crate::VolumeMd;
+use crate::Voxel;
 
 /// Volume data.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Volume<'d, T> {
+pub struct Volume<'d> {
   /// Metadata related to the volume.
   metadata: VolumeMd,
 
   /// Data related to the volume.
   data: &'d [u8],
-
-  /// Phantom data to use T.
-  phantom: PhantomData<T>,
 }
 
-impl<'d, T> Volume<'d, T> {
+impl<'d> Volume<'d> {
   /// Create a [volume structure](Volume) from metadata and a byte
   /// buffer.
   ///
@@ -70,24 +30,24 @@ impl<'d, T> Volume<'d, T> {
   /// A [volume structure](Volume) or [an error](Err) in case the size
   /// of `data` does not match the expected size provided by
   /// `metadata`.
-  pub fn from_slice(metadata: VolumeMd, data: &'d [u8]) -> Result<Self, Err> {
-    let expected = metadata.xdim() * metadata.ydim() * metadata.zdim() * Voxel::<T>::size();
+  pub fn from_slice(metadata: VolumeMd, data: &'d [u8]) -> Result<Self, MedvizErr> {
+    let expected = metadata.xdim() * metadata.ydim() * metadata.zdim() * Voxel::size();
 
     if data.len() != expected {
-      return Err(Err::new_data_size_mismatch(data.len(), expected));
+      return Err(MedvizErr::new_data_size_mismatch(data.len(), expected));
     }
 
-    if data.len() % Voxel::<T>::size() != 0 {
-      return Err(Err::new_data_size_uneven(data.len()));
+    if data.len() % Voxel::size() != 0 {
+      return Err(MedvizErr::new_data_size_uneven(data.len()));
     }
 
-    Ok(Self { metadata, data, phantom: PhantomData })
+    Ok(Self { metadata, data })
   }
 
   /// Return the slice of bytes that represents a frame on the Z-axis.
   fn zframe_bytes(&'d self, zframe_index: usize) -> &'d [u8] {
     // Size in bytes of a frame on the Z-axis.
-    let zframe_size = self.metadata.zframe_len() * Voxel::<T>::size();
+    let zframe_size = self.metadata.zframe_len() * Voxel::size();
     let zframe_byte_index = zframe_size * zframe_index;
     &self.data[zframe_byte_index..zframe_byte_index + zframe_size]
   }
@@ -96,7 +56,7 @@ impl<'d, T> Volume<'d, T> {
   /// the Z-axis.
   fn zframe_row_bytes(&'d self, zframe_index: usize, row_index: usize) -> &'d [u8] {
     // Size in bytes of a row on a frame on the Z-axis.
-    let row_size = self.metadata.xdim() * Voxel::<T>::size();
+    let row_size = self.metadata.xdim() * Voxel::size();
     let row_byte_index = row_size * row_index;
     let zframe = self.zframe_bytes(zframe_index);
     &zframe[row_byte_index..row_byte_index + row_size]
@@ -106,8 +66,8 @@ impl<'d, T> Volume<'d, T> {
   /// the Z-axis.
   fn zframe_voxel_bytes(&'d self, zframe_index: usize, x: usize, y: usize) -> &'d [u8] {
     let row = self.zframe_row_bytes(zframe_index, y);
-    let voxel_byte_index = x * Voxel::<T>::size();
-    &row[voxel_byte_index..voxel_byte_index + Voxel::<T>::size()]
+    let voxel_byte_index = x * Voxel::size();
+    &row[voxel_byte_index..voxel_byte_index + Voxel::size()]
   }
 
   /// Return an iterator over voxels of a column on a frame on the
@@ -120,10 +80,10 @@ impl<'d, T> Volume<'d, T> {
     &'d self,
     frame_index: usize,
     col_index: usize,
-  ) -> impl Iterator<Item = u16> + 'd {
+  ) -> impl Iterator<Item = Result<Voxel, MedvizErr>> + 'd {
     (0..self.metadata.ydim()).map(move |row_index| {
       let bytes = self.zframe_voxel_bytes(frame_index, col_index, row_index);
-      utils::voxel_from_bytes(bytes[0], bytes[1])
+      Voxel::from_slice(bytes)
     })
   }
 
@@ -144,7 +104,10 @@ impl<'d, T> Volume<'d, T> {
   ///
   /// An iterator over the voxels in the frame and their corresponding
   /// coordinates.
-  pub fn xframe(&'d self, xframe_index: usize) -> impl Iterator<Item = (u16, usize, usize)> + 'd {
+  pub fn xframe(
+    &'d self,
+    xframe_index: usize,
+  ) -> impl Iterator<Item = (Result<Voxel, MedvizErr>, usize, usize)> + 'd {
     (0..self.metadata.zdim())
       .rev()
       .map(move |zframe_index| self.zframe_col_iter(zframe_index, xframe_index))
@@ -173,11 +136,14 @@ impl<'d, T> Volume<'d, T> {
   ///
   /// An iterator over the voxels in the frame and their corresponding
   /// coordinates.
-  pub fn yframe(&'d self, yframe_index: usize) -> impl Iterator<Item = (u16, usize, usize)> + 'd {
+  pub fn yframe(
+    &'d self,
+    yframe_index: usize,
+  ) -> impl Iterator<Item = (Result<Voxel, MedvizErr>, usize, usize)> + 'd {
     // This works by going over every frame on the Z-axis. At each of
     // those frames, creates a slice out of the relevant row. The
     // chunking is there to later collect the pairs of u8 values into
-    // u16 voxel values.
+    // voxel values.
     //
     // The .rev() call is used to start going over the frames on the
     // Z-axis in reverse, since that seems to produce the better
@@ -190,19 +156,21 @@ impl<'d, T> Volume<'d, T> {
     // The enumeration is useful to produce indexes from which the
     // coordinates will be calculated.
     //
-    // The remaining step is to create the u16 voxel value and create
-    // the coordinates out of the index. Both of these are done in the
+    // The remaining step is to create the voxel value and create the
+    // coordinates out of the index. Both of these are done in the
     // final mapping.
     (0..self.metadata.zdim())
       .rev()
-      .map(move |zframe_index| self.zframe_row_bytes(zframe_index, yframe_index).chunks(2))
+      .map(move |zframe_index| {
+        self.zframe_row_bytes(zframe_index, yframe_index).chunks(Voxel::size())
+      })
       .flatten()
       .enumerate()
       .map(move |(index, bytes)| {
         // `index` was produced by the call to .enumerate(), and
         // `bytes` (a slice of 2 u8 elements) was produced by the call
-        // to .chunks(2).
-        let voxel = utils::voxel_from_bytes(bytes[0], bytes[1]);
+        // to .chunks().
+        let voxel = Voxel::from_slice(bytes);
         let xdim = self.metadata.xdim();
         (voxel, index % xdim, index / xdim)
       })
@@ -225,11 +193,14 @@ impl<'d, T> Volume<'d, T> {
   ///
   /// An iterator over the voxels in the frame and their corresponding
   /// coordinates.
-  pub fn zframe(&'d self, zframe_index: usize) -> impl Iterator<Item = (u16, usize, usize)> + 'd {
-    self.zframe_bytes(zframe_index).chunks(2).enumerate().map(move |(index, bytes)| {
+  pub fn zframe(
+    &'d self,
+    zframe_index: usize,
+  ) -> impl Iterator<Item = (Result<Voxel, MedvizErr>, usize, usize)> + 'd {
+    self.zframe_bytes(zframe_index).chunks(Voxel::size()).enumerate().map(move |(index, bytes)| {
       // Voxels are stored in little-endian. This should compile down
       // to a no-op on LE machines.
-      let voxel = utils::voxel_from_bytes(bytes[0], bytes[1]);
+      let voxel = Voxel::from_slice(bytes);
       let xdim = self.metadata.xdim();
       (voxel, index % xdim, index / xdim)
     })

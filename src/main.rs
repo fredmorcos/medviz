@@ -3,7 +3,8 @@
 use derive_more::{Display, From};
 use derive_new::new;
 use log::{debug, info, trace};
-use medviz::{utils, Volume, VolumeErr, VolumeMd, VolumeMdErr};
+use medviz::utils;
+use medviz::{MedvizErr, Volume, VolumeMd, Voxel};
 use memmap::MmapOptions;
 use std::io::{self, BufWriter};
 use std::num::TryFromIntError;
@@ -24,13 +25,9 @@ enum Err {
   #[display(fmt = "Dimension Error: {}", _0)]
   Dimension(TryFromIntError),
 
-  /// Errors from metadata loading and handling.
-  #[display(fmt = "Metadata Error: {}", _0)]
-  VolumeMd(VolumeMdErr),
-
-  /// Errors from volume data handling.
-  #[display(fmt = "Volume Data Error: {}", _0)]
-  Volume(VolumeErr),
+  /// Errors from the medviz library.
+  #[display(fmt = "Library Error: {}", _0)]
+  Medviz(MedvizErr),
 }
 
 /// When returning an error from main(), this will print its Display
@@ -105,7 +102,7 @@ fn main() -> Result<(), Err> {
 
   info!("Mapped {} bytes of data from {}", map.len(), opt.data.display());
 
-  let volume = Volume::<u16>::from_slice(metadata, &map)?;
+  let volume = Volume::from_slice(metadata, &map)?;
 
   if opt.raw {
     // Produce the X-frame, made up of voxels on the Y- and Z-axis.
@@ -152,15 +149,16 @@ fn main() -> Result<(), Err> {
 fn create_frame_raw(
   frame_name: &'static str,
   filename: &Path,
-  frame_iter: impl Iterator<Item = (u16, usize, usize)>,
-) -> Result<(), io::Error> {
+  frame_iter: impl Iterator<Item = (Result<Voxel, MedvizErr>, usize, usize)>,
+) -> Result<(), Err> {
   info!("Creating {} (raw) file at {}", frame_name, filename.display());
   let file = File::create(filename)?;
   let mut writer = BufWriter::new(file);
 
   info!("Writing {} (raw) to {}", frame_name, filename.display());
   for (voxel, _, _) in frame_iter {
-    writer.write_all(&voxel.to_le_bytes())?;
+    let voxel = voxel?;
+    writer.write_all(&voxel.value().to_le_bytes())?;
   }
 
   Ok(())
@@ -172,7 +170,7 @@ fn create_frame_image(
   filename: &Path,
   dim1: usize,
   dim2: usize,
-  frame_iter: impl Iterator<Item = (u16, usize, usize)>,
+  frame_iter: impl Iterator<Item = (Result<Voxel, MedvizErr>, usize, usize)>,
 ) -> Result<(), Err> {
   info!("Creating {} (bmp)", frame_name);
   let image = utils::frame_bmp(dim1, dim2, frame_iter)?;
