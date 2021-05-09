@@ -18,6 +18,9 @@ name = "medviz"
 [[bin]]
 name = "medviz"
 
+[[test]]
+name = "reference"
+
 [dependencies]
 derive_more = "0.99"
 derive-new = "0.5"
