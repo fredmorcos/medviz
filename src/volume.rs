@@ -85,19 +85,21 @@ impl<'d, T> Volume<'d, T> {
   }
 
   /// Return the slice of bytes that represents a frame on the Z-axis.
-  fn zframe_bytes(&'d self, frame_index: usize) -> &'d [u8] {
-    let zframe_bytes = self.metadata.zframe_len() * Voxel::<T>::size();
-    let start_voxel_byte_index = zframe_bytes * frame_index;
-    &self.data[start_voxel_byte_index..start_voxel_byte_index + zframe_bytes]
+  fn zframe_bytes(&'d self, zframe_index: usize) -> &'d [u8] {
+    // Size in bytes of a frame on the Z-axis.
+    let zframe_size = self.metadata.zframe_len() * Voxel::<T>::size();
+    let zframe_byte_index = zframe_size * zframe_index;
+    &self.data[zframe_byte_index..zframe_byte_index + zframe_size]
   }
 
   /// Return the slice of bytes that represents a row on a frame on
   /// the Z-axis.
-  fn zframe_row_bytes(&'d self, frame_index: usize, row_index: usize) -> &'d [u8] {
-    let row_bytes = self.metadata.xdim() * Voxel::<T>::size();
-    let start_byte_index = row_bytes * row_index;
-    let data = self.zframe_bytes(frame_index);
-    &data[start_byte_index..start_byte_index + row_bytes]
+  fn zframe_row_bytes(&'d self, zframe_index: usize, row_index: usize) -> &'d [u8] {
+    // Size in bytes of a row on a frame on the Z-axis.
+    let row_size = self.metadata.xdim() * Voxel::<T>::size();
+    let row_byte_index = row_size * row_index;
+    let zframe = self.zframe_bytes(zframe_index);
+    &zframe[row_byte_index..row_byte_index + row_size]
   }
 
   /// Create an iterator over the voxels in a frame on the Y-axis.
