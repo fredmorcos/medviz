@@ -1,0 +1,4 @@
+* Extract 2-dimensional X-, Y- and Z-axis frames from raw files of
+  3-dimensional volumetric data.
+
+* Produce BMP image files or raw frame data files.
