@@ -82,9 +82,6 @@ jobs:
           cp target/release/medviz $NAME/medviz
           cp target/debug/medviz $NAME/medviz-debug
           cp -r target/doc $NAME/docs
-          mkdir $NAME/examples
-          cp tests/programs/*.asm $NAME/examples/
-          cp LICENSE $NAME/LICENSE
           cp README.md $NAME/README.md
           tar -c -f $NAME.tar.bz2 $NAME
       - name: Upload tarball artifact
@@ -169,9 +166,6 @@ jobs:
           cp target/release/medviz $NAME/medviz
           cp target/debug/medviz $NAME/medviz-debug
           cp -r target/doc $NAME/docs
-          mkdir $NAME/examples
-          cp tests/programs/*.asm $NAME/examples/
-          cp LICENSE $NAME/LICENSE
           cp README.md $NAME/README.md
           hdiutil create -format UDZO -srcfolder $NAME $NAME.dmg
       - name: Upload tarball artifact
@@ -256,9 +250,6 @@ jobs:
           cp target/release/medviz.exe $NAME/medviz.exe
           cp target/debug/medviz.exe $NAME/medviz-debug.exe
           cp -r target/doc $NAME/docs
-          mkdir $NAME/examples
-          cp tests/programs/*.asm $NAME/examples/
-          cp LICENSE $NAME/LICENSE
           cp README.md $NAME/README.md
           # zip -r $NAME.zip $NAME
           7z a $NAME.zip $NAME
