@@ -35,7 +35,7 @@ available which are, by default, compressed using `zpaq` in an
 
 The reason for this is that Github only allows checked-in files up to
 50MB. I previously used [Git LFS](https://git-lfs.github.com) to store
-those files but immediately exhausted my large-file quota.
+those files but immediately exhausted the provided large-file quota.
 
 To extract the test files, `cd` into the `tests` directory and run
 `lrzuntar data.tar.lrz`, you should end up with a `tests/data`
@@ -44,7 +44,7 @@ directory containing `.bmp` and `.raw` files.
 Once the test data is available, execute `cargo test` in the top-level
 source directory.
 
-The test files are produced by a normal run of `medviz` that were
-simply manually checked. The integration test simple checks the
-current execution against these "model" files. I don't currently know
-a better way to system test a tool like `medviz`.
+The test files are produced by a normal run of `medviz` and were
+manually checked. The integration test checks the current execution
+against these "model" files. I don't currently know a better way to
+system test a tool like `medviz`.
