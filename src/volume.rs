@@ -57,7 +57,7 @@ impl<'d> Volume<'d> {
     &'d self,
     zframe_index: usize,
   ) -> impl Iterator<Item = Result<Voxel, MedvizErr>> + 'd {
-    self.zframe_bytes(zframe_index).chunks(Voxel::size()).map(|bytes| Voxel::from_slice(bytes))
+    self.zframe_bytes(zframe_index).chunks(Voxel::size()).map(Voxel::from_slice)
   }
 
   /// Return a slice of bytes of a row on a frame on the Z-axis.
@@ -75,10 +75,7 @@ impl<'d> Volume<'d> {
     zframe_index: usize,
     row_index: usize,
   ) -> impl Iterator<Item = Result<Voxel, MedvizErr>> + 'd {
-    self
-      .zframe_row_bytes(zframe_index, row_index)
-      .chunks(Voxel::size())
-      .map(|bytes| Voxel::from_slice(bytes))
+    self.zframe_row_bytes(zframe_index, row_index).chunks(Voxel::size()).map(Voxel::from_slice)
   }
 
   /// Return a slice of bytes of a voxel on a frame on the Z-axis.
@@ -146,8 +143,7 @@ impl<'d> Volume<'d> {
     // triple. Both of these are done in the final mapping.
     (0..self.metadata.zdim())
       .rev()
-      .map(move |zframe_index| self.zframe_col_iter(zframe_index, xframe_index))
-      .flatten()
+      .flat_map(move |zframe_index| self.zframe_col_iter(zframe_index, xframe_index))
       .enumerate()
       .map(move |(index, voxel)| {
         // `index` was produced by the call to .enumerate().
@@ -197,8 +193,7 @@ impl<'d> Volume<'d> {
     // triple. Both of these are done in the final mapping.
     (0..self.metadata.zdim())
       .rev()
-      .map(move |zframe_index| self.zframe_row_iter(zframe_index, yframe_index))
-      .flatten()
+      .flat_map(move |zframe_index| self.zframe_row_iter(zframe_index, yframe_index))
       .enumerate()
       .map(move |(index, voxel)| {
         // `index` was produced by the call to .enumerate().

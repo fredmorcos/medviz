@@ -197,7 +197,7 @@ mod volume_metadata_tests {
                   NDims = 3\n\
                   DimSize = 512 512 333\n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
-    let metadata = VolumeMd::from_buffer(&input).unwrap();
+    let metadata = VolumeMd::from_buffer(input).unwrap();
     assert_eq!(metadata.xdim, 512);
     assert_eq!(metadata.ydim, 512);
     assert_eq!(metadata.zdim, 333);
@@ -206,7 +206,7 @@ mod volume_metadata_tests {
   #[test]
   fn from_reader_success_single() {
     let input = "DimSize = 512 512 333";
-    let metadata = VolumeMd::from_buffer(&input).unwrap();
+    let metadata = VolumeMd::from_buffer(input).unwrap();
     assert_eq!(metadata.xdim, 512);
     assert_eq!(metadata.ydim, 512);
     assert_eq!(metadata.zdim, 333);
@@ -218,7 +218,7 @@ mod volume_metadata_tests {
                   NDims = 3\n\
                   DimSize = \n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
-    let err = VolumeMd::from_buffer(&input);
+    let err = VolumeMd::from_buffer(input);
     assert_eq!(err, Err(MedvizErr::MdMissingDimSizeValues { line_number: 3 }));
   }
 
@@ -228,7 +228,7 @@ mod volume_metadata_tests {
                   NDims = 3\n\
                   DimSize = 512 512 abc\n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
-    let err = VolumeMd::from_buffer(&input);
+    let err = VolumeMd::from_buffer(input);
     assert_eq!(
       err,
       Err(MedvizErr::MdInvalidDimSizeValue { line_number: 3, value: String::from("abc") })
@@ -242,7 +242,7 @@ mod volume_metadata_tests {
                   DimSize = 512 512 333\n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n\
                   DimSize = 512 512 333\n";
-    let err = VolumeMd::from_buffer(&input);
+    let err = VolumeMd::from_buffer(input);
     assert_eq!(err, Err(MedvizErr::MdDuplicateKey { line_number: 5 }));
   }
 
@@ -251,7 +251,7 @@ mod volume_metadata_tests {
     let input = "\n\
                   NDims = 3\n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
-    let err = VolumeMd::from_buffer(&input);
+    let err = VolumeMd::from_buffer(input);
     assert_eq!(err, Err(MedvizErr::MdDimSizeNotFound));
   }
 
@@ -261,14 +261,14 @@ mod volume_metadata_tests {
                   NDims = 3\n\
                   DimSize = 512 512 333 333\n\
                   ElementSpacing = 0.402344 0.402344 0.899994\n";
-    let err = VolumeMd::from_buffer(&input);
+    let err = VolumeMd::from_buffer(input);
     assert_eq!(err, Err(MedvizErr::MdTooManyDimSizeValues { line_number: 3 }));
   }
 
   #[test]
   fn from_reader_fail_empty() {
     let input = "";
-    let err = VolumeMd::from_buffer(&input);
+    let err = VolumeMd::from_buffer(input);
     assert_eq!(err, Err(MedvizErr::MdDimSizeNotFound));
   }
 
@@ -277,7 +277,7 @@ mod volume_metadata_tests {
     let input = "    \n\
                   \n\
                   \n";
-    let err = VolumeMd::from_buffer(&input);
+    let err = VolumeMd::from_buffer(input);
     assert_eq!(err, Err(MedvizErr::MdDimSizeNotFound));
   }
 }
