@@ -24,7 +24,7 @@ name = "reference"
 [dependencies]
 derive_more = "0.99"
 derive-new = "0.5"
-atoi = "0.4"
+atoi = "1.0"
 structopt = "0.3"
 env_logger = "0.8"
 log = "0.4"
