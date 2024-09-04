@@ -1,5 +1,6 @@
 #![warn(clippy::all)]
 
+use clap::Parser;
 use derive_more::{Display, From};
 use derive_new::new;
 use log::{debug, info, trace};
@@ -11,7 +12,6 @@ use std::num::TryFromIntError;
 use std::path::{Path, PathBuf};
 use std::{fmt, io::Write};
 use std::{fs::File, io::Read};
-use structopt::StructOpt;
 
 /// General top-level errors.
 #[derive(new, From, Display)]
@@ -39,10 +39,11 @@ impl fmt::Debug for Err {
 }
 
 /// Extract slices from volumetric data.
-#[derive(Debug, StructOpt)]
+#[derive(Debug, clap::Parser)]
+#[clap(author, version, about, long_about = None)]
 struct Opt {
   /// Verbose output (can be specified multiple times).
-  #[structopt(short, long, parse(from_occurrences))]
+  #[clap(short, long, action = clap::ArgAction::Count)]
   verbose: u8,
 
   /// Produce raw data instead of bmp images.
@@ -50,28 +51,28 @@ struct Opt {
   raw: bool,
 
   /// Input: Metadata file.
-  #[structopt(short, long, name = "metadata-file", parse(from_os_str))]
+  #[clap(short, long, name = "metadata-file")]
   metadata: PathBuf,
 
   /// Input: Volumetric data file.
-  #[structopt(short, long, name = "data-file", parse(from_os_str))]
+  #[clap(short, long, name = "data-file")]
   data: PathBuf,
 
   /// Output: X frame file (bmp).
-  #[structopt(short, long, name = "x-frame-file", parse(from_os_str))]
+  #[clap(short, long, name = "x-frame-file")]
   xfile: PathBuf,
 
   /// Output: Y frame file (bmp).
-  #[structopt(short, long, name = "y-frame-file", parse(from_os_str))]
+  #[clap(short, long, name = "y-frame-file")]
   yfile: PathBuf,
 
   /// Output: Z frame file (bmp).
-  #[structopt(short, long, name = "z-frame-file", parse(from_os_str))]
+  #[clap(short, long, name = "z-frame-file")]
   zfile: PathBuf,
 }
 
 fn main() -> Result<(), Err> {
-  let opt = Opt::from_args();
+  let opt = Opt::parse();
 
   let log_level = match opt.verbose {
     0 => log::LevelFilter::Warn,
